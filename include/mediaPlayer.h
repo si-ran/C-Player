@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <FL/Fl.H>
 #include <FL/Fl_Window.H>
 #include <FL/Fl_Box.H>
@@ -11,6 +12,20 @@ struct playUtil {
     Fl_Image* old_img;
     Fl_Image* new_img;
 };
+
+void playFLTKVideo(playUtil* util, AVFrame* outPic, int w, int h, boolean &isDrawOver) {
+    Fl_RGB_Image* image = new Fl_RGB_Image(outPic->data[0], w, h);
+    util->old_img = util->new_img;
+    util->new_img = image->copy(util->box->w() - 5, util->box->h() - 5);
+    Fl::lock();
+    util->box->image(util->new_img);
+    util->box->redraw();
+    Fl::unlock();
+    Fl::awake();
+    delete(util->old_img);
+    delete(image);
+    isDrawOver = true;
+}
 
 class MediaPlayer {
 private:
@@ -30,6 +45,7 @@ private:
 
     int videoIndex = -1;
     int audioIndex = -1;
+    boolean isDrawOver = true;
 public:
 	MediaPlayer(string url) {
         formatCtx = avformat_alloc_context();
@@ -216,7 +232,12 @@ public:
                     auto t = getPic->pts * av_q2d(formatCtx->streams[videoIndex]->time_base) * 1000;
                     sws_scale(sws_ctx, (uint8_t const* const*)getPic->data, getPic->linesize, 0,
                         videoCodecCtx->height, outPic->data, outPic->linesize);
-                    Fl_RGB_Image* image = new Fl_RGB_Image(outPic->data[0], videoCodecCtx->width, videoCodecCtx->height);
+                    if (isDrawOver) {
+                        isDrawOver = false;
+                        std::thread fltkVideo{ playFLTKVideo, util, outPic, std::ref(videoCodecCtx->width), std::ref(videoCodecCtx->height), std::ref(isDrawOver) };
+                        fltkVideo.detach();
+                    }
+                    /*Fl_RGB_Image* image = new Fl_RGB_Image(outPic->data[0], videoCodecCtx->width, videoCodecCtx->height);
                     util->old_img = util->new_img;
                     util->new_img = image->copy(util->box->w() - 5, util->box->h() - 5);
                     Fl::lock();
@@ -225,7 +246,7 @@ public:
                     Fl::unlock();
                     Fl::awake();
                     delete(util->old_img);
-                    delete(image);
+                    delete(image);*/
                 }
                 else if (ret == AVERROR_EOF) {
                     cout << "MediaProcessor no more output frames. index=" << endl;

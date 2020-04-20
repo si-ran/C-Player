@@ -15,8 +15,8 @@ struct playerData {
 
 void sdlAudioCallback(void* userdata, Uint8* stream, int len) {
     playerData* data = (playerData*)userdata;
-    data->player->playVideo(data->util);
     data->player->writeAudioData(stream, len);
+    data->player->playVideo(data->util);
 }
 
 void startSdlAudio(playerData* data) {
